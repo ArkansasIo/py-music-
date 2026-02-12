@@ -3,6 +3,7 @@ import random
 from theory import get_scale, get_chord, NOTES
 import mido
 from mido import MidiFile, MidiTrack, Message
+import fluidsynth
 
 NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 SCALES = {
@@ -192,3 +193,18 @@ def import_midi(filename):
             if msg.type == 'note_on' and msg.velocity > 0:
                 notes.append({'note': NOTES[(msg.note - 60) % 12], 'duration': 1, 'velocity': msg.velocity})
     return notes
+
+def play_song_with_soundfont(song, soundfont_path, instrument=0):
+    fs = fluidsynth.Synth()
+    fs.start(driver="dsound")
+    sfid = fs.sfload(soundfont_path)
+    fs.program_select(0, sfid, 0, instrument)
+    sample_rate = 44100
+    notes = song['notes'] if 'notes' in song else song.get('melody', [])
+    for note in notes:
+        midi_note = 60 + NOTES.index(note['note'])  # C4 = 60
+        duration = int(note['duration'] * 1000)  # ms
+        fs.noteon(0, midi_note, 100)
+        fluidsynth.sleep(duration / 1000)
+        fs.noteoff(0, midi_note)
+    fs.delete()

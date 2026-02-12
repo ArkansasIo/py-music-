@@ -1,6 +1,6 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
-from music import generate_song, generate_any_song
+from tkinter import ttk, messagebox, filedialog
+from music import generate_song, generate_any_song, play_song_with_soundfont
 from db import init_db, save_song, get_songs
 import threading
 import sounddevice as sd
@@ -168,10 +168,19 @@ class MusicGUI(tk.Tk):
         self.lyrics_box.insert(tk.END, song_data['lyrics'])
 
     def play_song(self):
-        if not self.current_song or not self.current_song['notes']:
+        if not self.current_song or not (self.current_song.get('notes') or self.current_song.get('melody')):
             messagebox.showinfo("Info", "No song generated.")
             return
-        threading.Thread(target=self._play_notes, daemon=True).start()
+        # Ask user if they want real instrument sound
+        if messagebox.askyesno("Playback Option", "Play with real instrument sound (SoundFont)?"):
+            from tkinter import filedialog
+            sf_path = filedialog.askopenfilename(title="Select SoundFont (.sf2)", filetypes=[("SoundFont Files", "*.sf2")])
+            if not sf_path:
+                return
+            from music import play_song_with_soundfont
+            threading.Thread(target=play_song_with_soundfont, args=(self.current_song, sf_path), daemon=True).start()
+        else:
+            threading.Thread(target=self._play_notes, daemon=True).start()
 
     def _play_notes(self):
         sample_rate = 44100
