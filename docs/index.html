@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Py-Music — Python music theory, composition, MIDI, synthesis and audio toolkit.">
+  <title>Py-Music</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <nav><strong>PY-MUSIC</strong><a href="https://github.com/ArkansasIo/py-music-">GitHub</a></nav>
+    <div class="hero-inner">
+      <p class="eyebrow">PYTHON MUSIC ENGINE</p>
+      <h1>Create, analyze, compose, and render music with Python.</h1>
+      <p class="lead">A modular toolkit for music theory, procedural composition, MIDI, synthesis, persistence, APIs, and extensible plugins.</p>
+      <div class="actions"><a class="button" href="https://github.com/ArkansasIo/py-music-">View Repository</a><a class="button secondary" href="#features">Explore Features</a></div>
+    </div>
+  </header>
+  <main>
+    <section id="features"><h2>Features</h2><div class="grid">
+      <article><h3>Music Theory</h3><p>Scales, modes, chords, intervals, transposition, frequencies, MIDI mapping, and harmonic calculations.</p></article>
+      <article><h3>Composition</h3><p>Deterministic procedural melody, rhythm, chord and song generation with reproducible seeds.</p></article>
+      <article><h3>MIDI</h3><p>Import and export musical events with timing, velocity, channel, and track information.</p></article>
+      <article><h3>Synthesis</h3><p>Dependency-light waveform rendering with oscillators, envelopes, velocity and multitrack mixing.</p></article>
+      <article><h3>Persistence</h3><p>SQLite-backed song storage and serialization for projects, tracks, notes and metadata.</p></article>
+      <article><h3>Plugins</h3><p>An extensible plugin host for composition transforms, instruments, effects and future integrations.</p></article>
+    </div></section>
+    <section class="code"><h2>Quick start</h2><pre><code>pip install -e .
+python -m pymusic.cli generate --title "Aurora" --key D --scale dorian --bars 16</code></pre></section>
+    <section><h2>Project direction</h2><p>Py-Music is designed to grow from a Python music toolkit into a complete programmable music workstation with piano-roll editing, real-time MIDI, DSP effects, visualization, project files, instrument libraries, and a desktop interface.</p></section>
+  </main>
+  <footer>Py-Music · ArkansasIo · Open source</footer>
+</body>
+</html>
