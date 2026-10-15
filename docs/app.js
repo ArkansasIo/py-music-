@@ -1,122 +1,34 @@
 (() => {
   'use strict';
-
-  const A4 = 440;
-  const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-  const SCALE_PATTERNS = {
-    major:[0,2,4,5,7,9,11], natural_minor:[0,2,3,5,7,8,10], dorian:[0,2,3,5,7,9,10],
-    phrygian:[0,1,3,5,7,8,10], lydian:[0,2,4,6,7,9,11], mixolydian:[0,2,4,5,7,9,10],
-    locrian:[0,1,3,5,6,8,10], harmonic_minor:[0,2,3,5,7,8,11], melodic_minor:[0,2,3,5,7,9,11]
-  };
-  const CHORD_PATTERNS = {
-    major:[0,4,7], minor:[0,3,7], diminished:[0,3,6], augmented:[0,4,8],
-    maj7:[0,4,7,11], min7:[0,3,7,10], dom7:[0,4,7,10], dim7:[0,3,6,9], sus2:[0,2,7], sus4:[0,5,7]
-  };
-  const state = { bpm:120, key:0, scale:'major', steps:16, sequence:Array(16).fill(null), waveform:'sine', volume:0.16, octave:4 };
-  let audio = null;
-
-  const $ = id => document.getElementById(id);
-  const midiToName = midi => `${NOTE_NAMES[(midi % 12 + 12) % 12]}${Math.floor(midi / 12) - 1}`;
-  const midiToFreq = midi => A4 * Math.pow(2, (midi - 69) / 12);
-  const nameToPc = name => NOTE_NAMES.indexOf(name.replace('♯','#').replace('♭',''));
-  const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-  function renderTheory() {
-    const root = state.key;
-    const pattern = SCALE_PATTERNS[state.scale];
-    $('scaleOutput').innerHTML = pattern.map(i => `<span class="pill">${NOTE_NAMES[(root+i)%12]}</span>`).join('');
-    const chordType = $('chordType').value;
-    const chordRoot = Number($('chordRoot').value);
-    $('chordOutput').innerHTML = CHORD_PATTERNS[chordType].map(i => `<span class="pill">${NOTE_NAMES[(chordRoot+i)%12]}</span>`).join('');
-    $('formulaOutput').textContent = `Scale intervals: ${pattern.join('–')} semitones from root. Chord: ${CHORD_PATTERNS[chordType].join(', ')}.`;
-  }
-
-  function renderPiano() {
-    const root = state.key;
-    const scale = new Set(SCALE_PATTERNS[state.scale]);
-    const start = 48, count = 25;
-    $('piano').innerHTML = '';
-    for (let i=0;i<count;i++) {
-      const midi = start+i, pc=midi%12, white=!['C#','D#','F#','G#','A#'].includes(NOTE_NAMES[pc]);
-      const key=document.createElement('button');
-      key.className='key '+(white?'white':'black')+(scale.has((pc-root+12)%12)?' in-scale':'');
-      key.innerHTML=`<span>${NOTE_NAMES[pc]}</span><small>${midi}</small>`;
-      key.addEventListener('pointerdown', e => { e.preventDefault(); playNote(midi,0.45); });
-      $('piano').appendChild(key);
-    }
-  }
-
-  function renderSequencer() {
-    $('sequencer').innerHTML='';
-    state.sequence.forEach((midi,i)=>{
-      const cell=document.createElement('button'); cell.className='step '+(midi!==null?'active':'');
-      cell.title=`Step ${i+1}`;
-      cell.textContent=midi===null?'·':midiToName(midi);
-      cell.onclick=()=>{ state.sequence[i]=midi===null ? state.key+60 : null; renderSequencer(); if(state.sequence[i]!=null) playNote(state.sequence[i],0.2); };
-      $('sequencer').appendChild(cell);
-    });
-  }
-
-  function ensureAudio() {
-    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
-    if (audio.state === 'suspended') audio.resume();
-    return audio;
-  }
-
-  function playNote(midi, duration=0.5, when=0) {
-    const ctx=ensureAudio(), now=ctx.currentTime+when;
-    const osc=ctx.createOscillator(), gain=ctx.createGain();
-    osc.type=state.waveform; osc.frequency.value=midiToFreq(midi);
-    gain.gain.setValueAtTime(0.0001,now); gain.gain.exponentialRampToValueAtTime(state.volume,now+0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001,now+duration);
-    osc.connect(gain).connect(ctx.destination); osc.start(now); osc.stop(now+duration+0.03);
-  }
-
-  async function playSequence() {
-    ensureAudio(); const beat=60/state.bpm;
-    state.sequence.forEach((m,i)=>{ if(m!==null) playNote(m,beat*0.82,i*beat); });
-    $('status').textContent=`Playing ${state.sequence.filter(Boolean).length} notes at ${state.bpm} BPM.`;
-  }
-
-  function renderWav() {
-    const notes=state.sequence.filter(n=>n!==null); if(!notes.length){ $('status').textContent='Add notes to the sequencer first.'; return; }
-    const sampleRate=44100, beat=60/state.bpm, noteDur=beat*0.82, total=Math.ceil((state.sequence.length*beat+0.2)*sampleRate);
-    const samples=new Float32Array(total);
-    state.sequence.forEach((m,idx)=>{ if(m===null)return; const start=Math.floor(idx*beat*sampleRate), len=Math.floor(noteDur*sampleRate), freq=midiToFreq(m);
-      for(let j=0;j<len && start+j<samples.length;j++){ const t=j/sampleRate, env=Math.min(1,j/(sampleRate*.01))*Math.max(0,1-j/Math.max(1,len)); samples[start+j]+=Math.sin(2*Math.PI*freq*t)*state.volume*env; }
-    });
-    const buffer=new ArrayBuffer(44+samples.length*2), view=new DataView(buffer);
-    const write=(o,s)=>{for(let i=0;i<s.length;i++)view.setUint8(o+i,s.charCodeAt(i));};
-    write(0,'RIFF'); view.setUint32(4,36+samples.length*2,true); write(8,'WAVE'); write(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true); view.setUint32(24,sampleRate,true); view.setUint32(28,sampleRate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true); write(36,'data'); view.setUint32(40,samples.length*2,true);
-    samples.forEach((v,i)=>view.setInt16(44+i*2,Math.max(-1,Math.min(1,v))*32767,true));
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buffer],{type:'audio/wav'})); a.download='py-music-sequence.wav'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); $('status').textContent='WAV rendered and downloaded.';
-  }
-
-  function saveProject() {
-    const data={version:1,bpm:state.bpm,key:state.key,scale:state.scale,waveform:state.waveform,volume:state.volume,sequence:state.sequence};
-    localStorage.setItem('pymusic-project',JSON.stringify(data)); $('status').textContent='Project saved locally.';
-  }
-  function loadProject() {
-    try { const d=JSON.parse(localStorage.getItem('pymusic-project')); if(!d) throw Error(); Object.assign(state,d); syncControls(); renderAll(); $('status').textContent='Project loaded.'; } catch { $('status').textContent='No saved project found.'; }
-  }
-  function exportJson() {
-    const blob=new Blob([JSON.stringify({format:'Py-Music Project',version:1,...state},null,2)],{type:'application/json'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='py-music-project.json';a.click();
-  }
-
-  function syncControls(){ $('bpm').value=state.bpm; $('bpmValue').textContent=state.bpm; $('key').value=NOTE_NAMES[state.key]; $('scale').value=state.scale; $('waveform').value=state.waveform; $('volume').value=Math.round(state.volume*100); $('volumeValue').textContent=Math.round(state.volume*100)+'%'; }
-  function renderAll(){ syncControls(); renderTheory(); renderPiano(); renderSequencer(); }
-
-  document.addEventListener('DOMContentLoaded',()=>{
-    $('bpm').oninput=e=>{state.bpm=+e.target.value;$('bpmValue').textContent=state.bpm;};
-    $('key').onchange=e=>{state.key=nameToPc(e.target.value);renderAll();};
-    $('scale').onchange=e=>{state.scale=e.target.value;renderAll();};
-    $('waveform').onchange=e=>state.waveform=e.target.value;
-    $('volume').oninput=e=>{state.volume=+e.target.value/100;$('volumeValue').textContent=e.target.value+'%';};
-    $('chordRoot').onchange=renderTheory; $('chordType').onchange=renderTheory;
-    $('play').onclick=playSequence; $('render').onclick=renderWav; $('save').onclick=saveProject; $('load').onclick=loadProject; $('export').onclick=exportJson;
-    $('clear').onclick=()=>{state.sequence.fill(null);renderSequencer();$('status').textContent='Sequencer cleared.';};
-    $('random').onclick=()=>{const p=SCALE_PATTERNS[state.scale];state.sequence=state.sequence.map(()=>Math.random()<.25?null:state.key+60+p[Math.floor(Math.random()*p.length)]+(Math.random()<.3?12:0));renderSequencer();};
-    renderAll();
+  const A4=440, NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const SCALE_PATTERNS={major:[0,2,4,5,7,9,11],natural_minor:[0,2,3,5,7,8,10],dorian:[0,2,3,5,7,9,10],phrygian:[0,1,3,5,7,8,10],lydian:[0,2,4,6,7,9,11],mixolydian:[0,2,4,5,7,9,10],locrian:[0,1,3,5,6,8,10],harmonic_minor:[0,2,3,5,7,8,11],melodic_minor:[0,2,3,5,7,9,11]};
+  const CHORD_PATTERNS={major:[0,4,7],minor:[0,3,7],diminished:[0,3,6],augmented:[0,4,8],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],dim7:[0,3,6,9],sus2:[0,2,7],sus4:[0,5,7]};
+  const state={version:2,title:'Untitled',bpm:120,key:0,scale:'major',sequence:Array(16).fill(null),waveform:'sine',volume:.16,octave:4};
+  let audio=null, playing=false, playTimer=null;
+  const $=id=>document.getElementById(id), midiToName=m=>`${NOTE_NAMES[(m%12+12)%12]}${Math.floor(m/12)-1}`, midiToFreq=m=>A4*Math.pow(2,(m-69)/12), nameToPc=n=>NOTE_NAMES.indexOf(n.replace('♯','#').replace('♭',''));
+  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function renderTheory(){const p=SCALE_PATTERNS[state.scale],r=state.key;$('scaleOutput').innerHTML=p.map(i=>`<span class="pill">${NOTE_NAMES[(r+i)%12]}</span>`).join('');const t=$('chordType').value,cr=+$('chordRoot').value;$('chordOutput').innerHTML=CHORD_PATTERNS[t].map(i=>`<span class="pill">${NOTE_NAMES[(cr+i)%12]}</span>`).join('');$('formulaOutput').textContent=`Scale: ${p.join(', ')} semitone offsets · Chord: ${CHORD_PATTERNS[t].join(', ')}.`;}
+  function renderPiano(){const scale=new Set(SCALE_PATTERNS[state.scale]),start=48;$('piano').innerHTML='';for(let i=0;i<25;i++){const m=start+i,pc=m%12,black=['C#','D#','F#','G#','A#'].includes(NOTE_NAMES[pc]);const k=document.createElement('button');k.className=`key ${black?'black':'white'} ${scale.has((pc-state.key+12)%12)?'in-scale':''}`;k.innerHTML=`<span>${NOTE_NAMES[pc]}</span><small>${m}</small>`;k.onpointerdown=e=>{e.preventDefault();k.classList.add('pressed');playNote(m,.45);setTimeout(()=>k.classList.remove('pressed'),180)};$('piano').appendChild(k);}}
+  function renderSequencer(){const root=state.key+60;$('sequencer').innerHTML='';state.sequence.forEach((m,i)=>{const c=document.createElement('button');c.className=`step ${m!==null?'active':''}`;c.title=`Step ${i+1}`;c.textContent=m===null?'·':midiToName(m);c.onclick=()=>{state.sequence[i]=m===null?root:null;renderSequencer();if(state.sequence[i]!=null)playNote(state.sequence[i],.2)};$('sequencer').appendChild(c)})}
+  function ensureAudio(){if(!audio)audio=new(window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();return audio}
+  function playNote(m,d=.5,when=0){const c=ensureAudio(),n=c.currentTime+when,o=c.createOscillator(),g=c.createGain();o.type=state.waveform;o.frequency.value=midiToFreq(m);g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(state.volume,n+.012);g.gain.exponentialRampToValueAtTime(.0001,n+d);o.connect(g).connect(c.destination);o.start(n);o.stop(n+d+.03)}
+  function stopSequence(){playing=false;clearInterval(playTimer);playTimer=null;$('play').textContent='▶ Play';$('status').textContent='Stopped.'}
+  function playSequence(){if(playing){stopSequence();return}ensureAudio();playing=true;$('play').textContent='■ Stop';let i=0;const beat=60/state.bpm;const tick=()=>{if(!playing)return;const m=state.sequence[i%state.sequence.length];if(m!==null)playNote(m,beat*.8);i++;};tick();playTimer=setInterval(tick,beat*1000);$('status').textContent=`Playing at ${state.bpm} BPM.`}
+  function renderWav(){const sr=44100,beat=60/state.bpm,dur=beat*.82,total=Math.ceil((16*beat+.25)*sr),s=new Float32Array(total);state.sequence.forEach((m,i)=>{if(m===null)return;const st=Math.floor(i*beat*sr),len=Math.floor(dur*sr),f=midiToFreq(m);for(let j=0;j<len&&st+j<s.length;j++){const t=j/sr,e=Math.min(1,j/(sr*.01))*Math.max(0,1-j/len);s[st+j]+=Math.sin(2*Math.PI*f*t)*state.volume*e}});const b=new ArrayBuffer(44+s.length*2),v=new DataView(b),w=(o,x)=>[...x].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));w(0,'RIFF');v.setUint32(4,36+s.length*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,s.length*2,true);s.forEach((x,i)=>v.setInt16(44+i*2,Math.max(-1,Math.min(1,x))*32767,true));download(new Blob([b],{type:'audio/wav'}),'py-music-sequence.wav');$('status').textContent='WAV rendered.'}
+  function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+  function project(){return {...state,sequence:[...state.sequence]}}
+  function saveProject(){localStorage.setItem('pymusic-project',JSON.stringify(project()));$('status').textContent='Project saved locally.'}
+  function loadProject(){try{const d=JSON.parse(localStorage.getItem('pymusic-project'));if(!d)throw 0;Object.assign(state,d);sync();renderAll();$('status').textContent='Project loaded.'}catch{$('status').textContent='No saved project found.'}}
+  function exportJson(){download(new Blob([JSON.stringify(project(),null,2)],{type:'application/json'}),'py-music-project.json')}
+  function importJson(){const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=async()=>{try{const d=JSON.parse(await i.files[0].text());Object.assign(state,d);state.sequence=(state.sequence||[]).slice(0,16);while(state.sequence.length<16)state.sequence.push(null);sync();renderAll();$('status').textContent='Project imported.'}catch{$('status').textContent='Invalid project file.'}};i.click()}
+  function vlq(n){const a=[n&127];while(n>>=7)a.unshift((n&127)|128);return a}
+  function exportMidi(){const tpq=480,beatTicks=tpq,events=[];state.sequence.forEach((m,i)=>{if(m===null)return;const st=i*beatTicks,d=Math.max(60,Math.floor(beatTicks*.8));events.push([st,0x90,m,92],[st+d,0x80,m,0])});events.sort((a,b)=>a[0]-b[0]);let bytes=[0x4d,0x54,0x68,0x64,0,0,0,6,0,0,0,1,(tpq>>8)&255,tpq&255];let track=[];let last=0;for(const e of events){track.push(...vlq(e[0]-last),e[1],e[2],e[3]);last=e[0]}track.push(...vlq(Math.max(0,tpq-last)),0xff,0x2f,0);const len=track.length;bytes.push(0x4d,0x54,0x72,0x6b,(len>>>24)&255,(len>>>16)&255,(len>>>8)&255,len&255,...track);download(new Uint8Array(bytes),'py-music.mid');$('status').textContent='MIDI exported.'}
+  function randomize(){const p=SCALE_PATTERNS[state.scale];state.sequence=state.sequence.map(()=>Math.random()<.22?null:state.key+60+p[Math.floor(Math.random()*p.length)]+(Math.random()<.25?12:0));renderSequencer()}
+  function clear(){state.sequence.fill(null);renderSequencer();$('status').textContent='Sequencer cleared.'}
+  function sync(){$('bpm').value=state.bpm;$('bpmValue').textContent=state.bpm;$('key').value=NOTE_NAMES[state.key];$('scale').value=state.scale;$('waveform').value=state.waveform;$('volume').value=Math.round(state.volume*100);$('volumeValue').textContent=Math.round(state.volume*100)+'%'}
+  function renderAll(){sync();renderTheory();renderPiano();renderSequencer()}
+  document.addEventListener('DOMContentLoaded',()=>{$('bpm').oninput=e=>{state.bpm=+e.target.value;$('bpmValue').textContent=state.bpm};$('key').onchange=e=>{state.key=nameToPc(e.target.value);renderAll()};$('scale').onchange=e=>{state.scale=e.target.value;renderAll()};$('waveform').onchange=e=>state.waveform=e.target.value;$('volume').oninput=e=>{state.volume=+e.target.value/100;$('volumeValue').textContent=e.target.value+'%'};$('chordRoot').onchange=renderTheory;$('chordType').onchange=renderTheory;$('play').onclick=playSequence;$('render').onclick=renderWav;$('save').onclick=saveProject;$('load').onclick=loadProject;$('export').onclick=exportJson;$('clear').onclick=clear;$('random').onclick=randomize;
+    const importBtn=document.createElement('button');importBtn.textContent='Import JSON';importBtn.onclick=importJson;$('export').parentElement.appendChild(importBtn);const midiBtn=document.createElement('button');midiBtn.textContent='Export MIDI';midiBtn.onclick=exportMidi;$('export').parentElement.appendChild(midiBtn);
+    document.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))return;const map={a:57,w:58,s:59,e:60,d:60,f:62,t:63,g:64,y:65,h:66,u:67,j:68,k:69,o:70,l:71,p:72,';':73};if(map[e.key]!==undefined){e.preventDefault();playNote(map[e.key],.35)}});renderAll();
   });
 })();
