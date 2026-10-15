@@ -1,0 +1,24 @@
+[project]
+name = "py-music"
+version = "2.0.0"
+description = "Modular Python music composition, theory, MIDI and audio toolkit"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy>=2.0", "mido>=1.3"]
+
+[project.optional-dependencies]
+audio = ["sounddevice>=0.5", "soundfile>=0.12"]
+ui = ["matplotlib>=3.8"]
+server = ["fastapi>=0.115", "uvicorn>=0.30"]
+all = ["sounddevice>=0.5", "soundfile>=0.12", "matplotlib>=3.8", "fastapi>=0.115", "uvicorn>=0.30", "pyfluidsynth>=1.3"]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+py-music = "pymusic.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

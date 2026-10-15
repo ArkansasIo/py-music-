@@ -1,47 +1,63 @@
-# Music Program
+# Py-Music
 
-A modular Python music creation program with:
-- Song and lyric generation
-- Music theory and multi-track support
-- Virtual keyboard, audio playback, and oscilloscope
-- SoundFont (real instrument) playback
-- Database for songs
-- MIDI import/export
-- Professional folder structure
+A modular Python music creation toolkit. The existing repository already contains music theory, song generation, GUI/audio prototypes, a database, MIDI support and tests; this revision organizes those capabilities into a reusable `pymusic` package. fileciteturn4file0
 
-## Project Structure
+## Architecture
 
-- core/ — music theory, types, multi-track
-- audio/ — playback, synthesis, soundfont
-- ui/ — GUI, panels, widgets
-- data/ — database, persistence
-- tests/ — test cases
-- samples/, soundfonts/ — user assets
+- `pymusic/models.py` — typed Song/Track/NoteEvent domain model.
+- `pymusic/theory.py` — pitch/frequency conversion, scales, chords, transposition and harmonics.
+- `pymusic/composer.py` — deterministic/randomized melody and chord generation.
+- `pymusic/midi.py` — MIDI import/export through Mido.
+- `pymusic/audio.py` — dependency-light WAV synthesis plus optional sounddevice playback.
+- `pymusic/data/repository.py` — SQLite persistence.
+- `pymusic/cli.py` — command-line generation workflow.
 
-## How to Run
+The legacy top-level modules remain available for compatibility. The new package avoids the previous duplication between `music.py` and `theory.py`, while keeping the original project's core goals of song generation, theory, multitrack support, playback, MIDI and persistence. fileciteturn2file0
 
-1. Install dependencies:
-   ```sh
-   pip install -r requirements.txt
-   ```
-2. Launch the GUI:
-   ```sh
-   python ui/main.py
-   ```
-3. (Optional) Use your own .sf2 SoundFont for realistic playback.
+## Install
 
-## Features
-- Generate songs and lyrics using music theory
-- Multi-track editor for multiple instruments
-- Play songs with real instrument sounds (SoundFont)
-- Save/load songs to/from a database
-- MIDI import/export
-- Oscilloscope visualization
-- Control panel: volume, tempo, play mode, mute, stop
+```bash
+python -m pip install -e .
+# optional complete stack
+python -m pip install -e '.[all,test]'
+```
 
-## Requirements
-- Python 3.8+
-- numpy, sounddevice, matplotlib, mido, pyfluidsynth, tkinter, fastapi, uvicorn
+## Generate a song
 
-## License
-Open source. See LICENSE file.
+```bash
+py-music generate --title "Aurora" --key C --scale major --bars 16 --midi aurora.mid --wav aurora.wav
+```
+
+## Python API
+
+```python
+from pymusic.composer import SongGenerator
+from pymusic.midi import export_midi
+from pymusic.audio import Synth
+
+song = SongGenerator(seed=42).song("Demo", "D", "dorian", bars=8)
+export_midi(song, "demo.mid")
+Synth().render(song, "demo.wav")
+```
+
+## Design principles
+
+1. **Data first:** musical events are plain typed objects and can be serialized.
+2. **Determinism:** composition can use a seed for reproducible results.
+3. **Optional backends:** theory/composition work without audio hardware.
+4. **Interchange:** MIDI is the primary interoperable sequence format.
+5. **Testability:** algorithms are separated from GUI and hardware concerns.
+6. **Extensibility:** additional synthesizers, notation engines, DAW adapters and APIs can be added without changing the core model.
+
+## Planned extension points
+
+- SoundFont renderer and instrument registry.
+- MIDI device input/output and clock synchronization.
+- Piano-roll and notation editor.
+- DSP effects: EQ, compressor, delay, reverb and limiter.
+- Audio analysis: RMS, peak, FFT, spectral centroid and tempo estimation.
+- Plugin protocol for instruments/effects/exporters.
+- FastAPI service and WebSocket live playback control.
+- Project file format with versioned migrations.
+
+No copyrighted music is bundled. Users supply their own audio, MIDI and SoundFont assets.
